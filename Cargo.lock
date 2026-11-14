@@ -393,6 +393,7 @@ name = "convertee"
 version = "0.1.0"
 dependencies = [
  "convertee-core",
+ "convertee-guard",
  "serde",
  "tauri",
  "tauri-build",
@@ -403,9 +404,14 @@ name = "convertee-core"
 version = "0.1.0"
 dependencies = [
  "butteraugli",
+ "convertee-guard",
  "image",
  "jpeg-encoder",
 ]
+
+[[package]]
+name = "convertee-guard"
+version = "0.1.0"
 
 [[package]]
 name = "cookie"

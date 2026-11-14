@@ -12,3 +12,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 jpeg-encoder = "0.7"
 # 사람 눈 기준으로 원본과 얼마나 달라 보이는지 재기
 butteraugli = "0.9"
+
+[build-dependencies]
+# 빌드 전에 0번 조건을 검사한다. 실패하면 빌드가 멈춘다.
+convertee-guard = { path = "../guard" }

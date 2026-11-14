@@ -7,6 +7,8 @@ description = "파일을 끌어다 놓으면 버튼 한 번으로 형식을 바�
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# 빌드 전에 0번 조건을 검사한다. 실패하면 빌드가 멈춘다.
+convertee-guard = { path = "../crates/guard" }
 
 [dependencies]
 tauri = { version = "2", features = [] }

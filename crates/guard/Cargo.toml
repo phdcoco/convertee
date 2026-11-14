@@ -1,0 +1,9 @@
+[package]
+name = "convertee-guard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "핵심 계산을 별도 프로그램에 맡기지 않는지 빌드 전에 검사한다"
+
+# 의존성 없이 표준 라이브러리만 쓴다
+[dependencies]

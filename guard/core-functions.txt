@@ -1,0 +1,9 @@
+# 핵심 계산 함수 목록. 줄마다 "러스트 파일 | 그 안에 있어야 할 글"
+# 검사는 파일이 .rs인지, 그 글이 들어 있는지 본다. 하나라도 없으면 빌드가 멈춘다.
+
+# 파일 종류 알아내기
+crates/core/src/detect.rs | pub fn detect(
+# PNG를 JPEG로 바꾸기 (화질 자동 결정 포함)
+crates/core/src/jpeg.rs | pub fn png_to_jpeg(
+# 앱이 변환을 러스트 핵심 계산에 맡기는지
+src-tauri/src/main.rs | png_to_jpeg(&input)
