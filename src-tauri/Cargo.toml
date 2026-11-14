@@ -1,0 +1,14 @@
+[package]
+name = "convertee"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "파일을 끌어다 놓으면 버튼 한 번으로 형식을 바꾸는 앱"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+convertee-core = { path = "../crates/core" }

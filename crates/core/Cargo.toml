@@ -1,0 +1,14 @@
+[package]
+name = "convertee-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "convertee의 핵심 계산: 파일 종류 알아내기와 형식 변환"
+
+[dependencies]
+# PNG 읽기, 그리고 화질을 재려고 만든 JPEG를 다시 읽기
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# JPEG 쓰기
+jpeg-encoder = "0.7"
+# 사람 눈 기준으로 원본과 얼마나 달라 보이는지 재기
+butteraugli = "0.9"

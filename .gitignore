@@ -1,0 +1,4 @@
+/target
+/tests/fixtures/
+.DS_Store
+/src-tauri/gen/
