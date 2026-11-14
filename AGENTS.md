@@ -42,4 +42,6 @@
 - crates/guard: 0번 조건 검사 코드. crates/core와 src-tauri의 build.rs가 부르므로 cargo check, test, build 전에 자동으로 돌고, 위반이 있으면 빌드가 멈춘다.
 - guard/allow.txt: 사용자에게 허락받은 별도 프로그램 목록 (지금은 비어 있다).
 - guard/core-functions.txt: 핵심 계산 함수와 그 함수가 있어야 할 러스트 파일 목록. 핵심 계산 함수를 새로 만들거나 옮기면 여기도 고친다.
+- scripts/release.sh: 릴리스 빌드 한 번과 앱 번들 검사. 번들 검사에 실패하면 번들을 지우고 멈춘다.
+- crates/core/examples/measure.rs: 핵심 계산 한 번의 시간을 잰다.
 - scripts/make-fixtures.sh: 시험용 실제 PNG를 이 맥의 사진과 아이콘으로 만든다 (git에 올리지 않는다).

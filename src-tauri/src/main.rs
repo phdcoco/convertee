@@ -8,13 +8,23 @@ use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use convertee_core::{FileKind, HEAD_LEN, Target, detect, png_to_jpeg};
 use serde::Serialize;
+use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, WindowEvent};
 
 /// 한 파일을 통째로 읽을 때의 상한
 const MAX_INPUT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// 측정용 기록. CONVERTEE_TIMING 환경 변수가 있을 때만 표준 오류로 쓴다. 파일 이름이나 경로는 쓰지 않는다.
+fn timing(message: &str) {
+    if std::env::var_os("CONVERTEE_TIMING").is_some() {
+        let unix_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        eprintln!("CONVERTEE_TIMING unix_ms={unix_ms} {message}");
+    }
+}
 
 struct Entry {
     path: PathBuf,
@@ -130,10 +140,18 @@ async fn prepare(app: AppHandle, id: u64, target: String) -> Result<PrepareInfo,
         if len > MAX_INPUT_BYTES {
             return Err("파일이 너무 큽니다".into());
         }
+        let started = Instant::now();
         let input = std::fs::read(&path).map_err(|e| format!("읽을 수 없습니다: {e}"))?;
         let out = match target {
             Target::Jpeg => png_to_jpeg(&input).map_err(|e| e.to_string())?,
         };
+        timing(&format!(
+            "prepare id={id} in_bytes={} out_bytes={} quality={} ms={}",
+            input.len(),
+            out.bytes.len(),
+            out.quality,
+            started.elapsed().as_millis()
+        ));
         let info = PrepareInfo {
             out_size: out.bytes.len() as u64,
             quality: out.quality,
@@ -160,7 +178,9 @@ async fn save(app: AppHandle, id: u64) -> Result<SaveInfo, String> {
             let prepared = entry.prepared.take().ok_or("아직 준비되지 않았습니다")?;
             (entry.path.clone(), prepared)
         };
+        let started = Instant::now();
         let out_path = write_new_file(&path, prepared.target.extension(), &prepared.bytes)?;
+        timing(&format!("save id={id} bytes={} ms={}", prepared.bytes.len(), started.elapsed().as_millis()));
         Ok(SaveInfo { name: display_name(&out_path), size: prepared.bytes.len() as u64 })
     })
     .await
@@ -200,8 +220,14 @@ fn write_new_file(source: &Path, extension: &str, bytes: &[u8]) -> Result<PathBu
 }
 
 fn main() {
+    timing("main_started");
     tauri::Builder::default()
         .manage(AppState::default())
+        .on_page_load(|_, payload| {
+            if payload.event() == PageLoadEvent::Finished {
+                timing("page_loaded");
+            }
+        })
         .invoke_handler(tauri::generate_handler![prepare, save, clear])
         .on_window_event(|window, event| {
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
