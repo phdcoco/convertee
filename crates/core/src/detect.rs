@@ -23,6 +23,7 @@ pub enum FileKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
     Jpeg,
+    Pdf,
 }
 
 impl FileKind {
@@ -49,6 +50,7 @@ impl FileKind {
     pub fn targets(self) -> &'static [Target] {
         match self {
             FileKind::Png => &[Target::Jpeg],
+            FileKind::Pptx => &[Target::Pdf],
             _ => &[],
         }
     }
@@ -58,12 +60,14 @@ impl Target {
     pub fn label(self) -> &'static str {
         match self {
             Target::Jpeg => "JPEG",
+            Target::Pdf => "PDF",
         }
     }
 
     pub fn extension(self) -> &'static str {
         match self {
             Target::Jpeg => "jpg",
+            Target::Pdf => "pdf",
         }
     }
 }
@@ -146,8 +150,9 @@ mod tests {
     }
 
     #[test]
-    fn 지금은_png만_jpeg로_바꿀_수_있다() {
+    fn 바꿀_수_있는_형식() {
         assert_eq!(FileKind::Png.targets(), &[Target::Jpeg]);
+        assert_eq!(FileKind::Pptx.targets(), &[Target::Pdf]);
         assert!(FileKind::Pdf.targets().is_empty());
     }
 }

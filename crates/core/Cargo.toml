@@ -12,6 +12,14 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 jpeg-encoder = "0.7"
 # 사람 눈 기준으로 원본과 얼마나 달라 보이는지 재기
 butteraugli = "0.9"
+# PPTX 슬라이드를 도형, 그림, 글자 목록으로 그리기
+betteroffice-pptx = { version = "0.5", features = ["raster"] }
+# 그린 목록을 PDF로 쓰기
+krilla = "0.8"
+# PPTX 안 EMF 그림(윈도우 그림 파일)을 풀기. betteroffice-pptx가 이미 쓰는 것과 같은 판
+betteroffice-metafile = "0.5"
+# PPTX(압축 파일) 안의 그림을 바꿔 넣기. betteroffice-pptx가 이미 쓰는 것과 같은 판과 기능
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [build-dependencies]
 # 빌드 전에 0번 조건을 검사한다. 실패하면 빌드가 멈춘다.

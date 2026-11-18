@@ -13,3 +13,10 @@ cp "/System/Library/CoreServices/Dock.app/Contents/Resources/s-trashfull@2x.png"
 # 큰 사진 예시: 바탕화면 사진을 PNG로 (실제 사용 시간을 잴 때 쓴다)
 sips -s format png "/System/Library/Desktop Pictures/Sonoma.heic" --out "$OUT/large.png" >/dev/null
 ls -l "$OUT"
+
+# PPTX 예시: 개인 자료라 경로를 git에 남기지 않는다. 쓸 때만 환경 변수로 알려 준다.
+#   CONVERTEE_PPTX_SAMPLE=/경로/강의.pptx ./scripts/make-fixtures.sh
+if [ -n "${CONVERTEE_PPTX_SAMPLE:-}" ]; then
+    cp "$CONVERTEE_PPTX_SAMPLE" "$OUT/lecture.pptx"
+    ls -l "$OUT/lecture.pptx"
+fi

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use convertee_core::{FileKind, HEAD_LEN, Target, detect, png_to_jpeg};
+use convertee_core::{FileKind, HEAD_LEN, Target, detect, png_to_jpeg, pptx_to_pdf};
 use serde::Serialize;
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, WindowEvent};
@@ -45,6 +45,91 @@ struct Files {
 
 type AppState = Mutex<Files>;
 
+/// 사용자가 고른 설정. 앱 데이터 폴더의 settings.txt에 "이름=값" 줄로 남긴다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Settings {
+    /// JPEG 파일 이름 끝. "jpg" 또는 "jpeg" (같은 형식이고 이름만 다르다)
+    jpeg_extension: &'static str,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { jpeg_extension: "jpg" }
+    }
+}
+
+/// 화면이 고를 수 있는 JPEG 확장자. 이 둘 말고는 받지 않는다.
+fn jpeg_extension_from(value: &str) -> Option<&'static str> {
+    match value {
+        "jpg" => Some("jpg"),
+        "jpeg" => Some("jpeg"),
+        _ => None,
+    }
+}
+
+impl Settings {
+    fn parse(text: &str) -> Settings {
+        let mut settings = Settings::default();
+        for line in text.lines() {
+            if let Some(("jpeg_extension", value)) = line.split_once('=')
+                && let Some(ext) = jpeg_extension_from(value.trim())
+            {
+                settings.jpeg_extension = ext;
+            }
+        }
+        settings
+    }
+
+    fn to_text(&self) -> String {
+        format!("jpeg_extension={}\n", self.jpeg_extension)
+    }
+
+    fn extension(&self, target: Target) -> &'static str {
+        match target {
+            Target::Jpeg => self.jpeg_extension,
+            Target::Pdf => target.extension(),
+        }
+    }
+}
+
+fn settings_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|dir| dir.join("settings.txt"))
+}
+
+fn load_settings(app: &AppHandle) -> Settings {
+    settings_path(app)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .map(|text| Settings::parse(&text))
+        .unwrap_or_default()
+}
+
+#[derive(Serialize)]
+struct SettingsInfo {
+    jpeg_extension: &'static str,
+}
+
+/// 지금 설정을 알려 준다.
+#[tauri::command]
+fn settings(app: AppHandle) -> Result<SettingsInfo, String> {
+    let settings = app.state::<Mutex<Settings>>();
+    let settings = settings.lock().map_err(|_| "내부 오류")?;
+    Ok(SettingsInfo { jpeg_extension: settings.jpeg_extension })
+}
+
+/// JPEG 확장자를 바꾸고 다음에 켤 때도 쓰도록 남긴다.
+#[tauri::command]
+fn set_jpeg_extension(app: AppHandle, extension: String) -> Result<(), String> {
+    let ext = jpeg_extension_from(&extension).ok_or("jpg 또는 jpeg만 고를 수 있습니다")?;
+    let state = app.state::<Mutex<Settings>>();
+    let mut settings = state.lock().map_err(|_| "내부 오류")?;
+    settings.jpeg_extension = ext;
+    let path = settings_path(&app).ok_or("설정 폴더를 알 수 없습니다")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("설정을 남기지 못했습니다: {e}"))?;
+    }
+    std::fs::write(&path, settings.to_text()).map_err(|e| format!("설정을 남기지 못했습니다: {e}"))
+}
+
 #[derive(Serialize, Clone)]
 struct TargetInfo {
     id: &'static str,
@@ -61,12 +146,17 @@ struct DroppedFile {
     error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 struct PrepareInfo {
     out_size: u64,
-    quality: u8,
+    /// JPEG: 고른 화질
+    quality: Option<u8>,
+    /// JPEG: 원본과 달라 보이는 정도 (butteraugli 거리)
     distance: Option<f64>,
+    /// JPEG: 투명한 부분이 있었는지
     had_alpha: bool,
+    /// PDF: 쪽 수
+    pages: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -78,12 +168,14 @@ struct SaveInfo {
 fn target_id(t: Target) -> &'static str {
     match t {
         Target::Jpeg => "jpeg",
+        Target::Pdf => "pdf",
     }
 }
 
 fn target_from_id(id: &str) -> Option<Target> {
     match id {
         "jpeg" => Some(Target::Jpeg),
+        "pdf" => Some(Target::Pdf),
         _ => None,
     }
 }
@@ -142,25 +234,38 @@ async fn prepare(app: AppHandle, id: u64, target: String) -> Result<PrepareInfo,
         }
         let started = Instant::now();
         let input = std::fs::read(&path).map_err(|e| format!("읽을 수 없습니다: {e}"))?;
-        let out = match target {
-            Target::Jpeg => png_to_jpeg(&input).map_err(|e| e.to_string())?,
+        let (bytes, info) = match target {
+            Target::Jpeg => {
+                let out = png_to_jpeg(&input).map_err(|e| e.to_string())?;
+                let info = PrepareInfo {
+                    out_size: out.bytes.len() as u64,
+                    quality: Some(out.quality),
+                    distance: out.distance,
+                    had_alpha: out.had_alpha,
+                    ..PrepareInfo::default()
+                };
+                (out.bytes, info)
+            }
+            Target::Pdf => {
+                let out = pptx_to_pdf(&input).map_err(|e| e.to_string())?;
+                let info = PrepareInfo {
+                    out_size: out.bytes.len() as u64,
+                    pages: Some(out.pages),
+                    ..PrepareInfo::default()
+                };
+                (out.bytes, info)
+            }
         };
         timing(&format!(
-            "prepare id={id} in_bytes={} out_bytes={} quality={} ms={}",
+            "prepare id={id} target={} in_bytes={} out_bytes={} ms={}",
+            target_id(target),
             input.len(),
-            out.bytes.len(),
-            out.quality,
+            bytes.len(),
             started.elapsed().as_millis()
         ));
-        let info = PrepareInfo {
-            out_size: out.bytes.len() as u64,
-            quality: out.quality,
-            distance: out.distance,
-            had_alpha: out.had_alpha,
-        };
         let mut files = state.lock().map_err(|_| "내부 오류")?;
         let entry = files.entries.get_mut(&id).ok_or("목록에서 지워졌습니다")?;
-        entry.prepared = Some(Prepared { target, bytes: out.bytes });
+        entry.prepared = Some(Prepared { target, bytes });
         Ok(info)
     })
     .await
@@ -178,8 +283,13 @@ async fn save(app: AppHandle, id: u64) -> Result<SaveInfo, String> {
             let prepared = entry.prepared.take().ok_or("아직 준비되지 않았습니다")?;
             (entry.path.clone(), prepared)
         };
+        let extension = {
+            let settings = app.state::<Mutex<Settings>>();
+            let settings = settings.lock().map_err(|_| "내부 오류")?;
+            settings.extension(prepared.target)
+        };
         let started = Instant::now();
-        let out_path = write_new_file(&path, prepared.target.extension(), &prepared.bytes)?;
+        let out_path = write_new_file(&path, extension, &prepared.bytes)?;
         timing(&format!("save id={id} bytes={} ms={}", prepared.bytes.len(), started.elapsed().as_millis()));
         Ok(SaveInfo { name: display_name(&out_path), size: prepared.bytes.len() as u64 })
     })
@@ -223,12 +333,17 @@ fn main() {
     timing("main_started");
     tauri::Builder::default()
         .manage(AppState::default())
+        .setup(|app| {
+            let settings = load_settings(app.handle());
+            app.manage(Mutex::new(settings));
+            Ok(())
+        })
         .on_page_load(|_, payload| {
             if payload.event() == PageLoadEvent::Finished {
                 timing("page_loaded");
             }
         })
-        .invoke_handler(tauri::generate_handler![prepare, save, clear])
+        .invoke_handler(tauri::generate_handler![prepare, save, clear, settings, set_jpeg_extension])
         .on_window_event(|window, event| {
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
                 let state = window.state::<AppState>();
@@ -284,6 +399,31 @@ mod tests {
         let out = write_new_file(&src, "jpg", b"new").unwrap();
         assert_eq!(out, dir.join("b (1).jpg"));
         assert_eq!(std::fs::read(&src).unwrap(), b"\x89PNG\r\n\x1a\n");
+    }
+
+    #[test]
+    fn jpeg_확장자_설정을_읽고_쓴다() {
+        assert_eq!(Settings::default().jpeg_extension, "jpg");
+        let jpeg = Settings::parse("jpeg_extension=jpeg\n");
+        assert_eq!(jpeg.extension(Target::Jpeg), "jpeg");
+        assert_eq!(jpeg.extension(Target::Pdf), "pdf");
+        assert_eq!(Settings::parse(&jpeg.to_text()), jpeg);
+        // 모르는 값이나 깨진 파일은 기본값
+        assert_eq!(Settings::parse("jpeg_extension=exe\n"), Settings::default());
+        assert_eq!(Settings::parse("아무 글"), Settings::default());
+        assert_eq!(jpeg_extension_from("../x"), None);
+    }
+
+    #[test]
+    fn pptx는_pdf로_바꿀_수_있다() {
+        let dir = temp_dir("pptx");
+        let src = dir.join("발표.pptx");
+        std::fs::write(&src, b"PK\x03\x04....[Content_Types].xml....ppt/presentation.xml").unwrap();
+        let mut files = Files::default();
+        let d = register(&mut files, src);
+        assert_eq!(d.kind, "파워포인트(PPTX)");
+        assert_eq!(d.targets.iter().map(|t| t.id).collect::<Vec<_>>(), ["pdf"]);
+        assert_eq!(target_from_id("pdf"), Some(Target::Pdf));
     }
 
     #[test]

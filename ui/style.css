@@ -71,6 +71,35 @@ button.plain {
   padding: 4px 0;
 }
 
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.options {
+  max-width: 300px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.options[hidden] {
+  display: none;
+}
+
+.options select {
+  font: inherit;
+  margin-left: 4px;
+}
+
+.hint {
+  color: #6e6e73;
+  font-size: 12px;
+}
+
 #summary {
   margin: 10px 0 0;
   color: #6e6e73;

@@ -15,7 +15,19 @@
 
       <section id="ask" hidden>
         <h2>무엇으로 바꿀까요?</h2>
-        <div id="actions"></div>
+        <div class="row">
+          <div id="actions"></div>
+          <div id="jpeg-options" class="options" hidden>
+            <label>
+              JPEG 파일 이름 끝
+              <select id="jpeg-ext">
+                <option value="jpg">.jpg</option>
+                <option value="jpeg">.jpeg</option>
+              </select>
+            </label>
+            <span class="hint">.jpg와 .jpeg는 같은 형식입니다. 이름 끝만 다르니 편한 쪽을 고르세요.</span>
+          </div>
+        </div>
         <p id="summary"></p>
       </section>
 

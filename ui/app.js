@@ -4,6 +4,7 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const items = new Map(); // 번호 -> 파일 상태
+const buttons = new Map(); // 형식 -> 바꾸기 버튼
 let queue = Promise.resolve(); // 미리 만들기는 한 번에 하나씩
 
 const $ = (id) => document.getElementById(id);
@@ -66,6 +67,9 @@ function statusText(item) {
     case "preparing":
       return ["예상 크기 계산 중", ""];
     case "ready": {
+      if (p.pages !== null) {
+        return [`${item.target.label}로 바꾸면 예상 ${fmt(p.out_size)} (${p.pages}쪽)`, ""];
+      }
       let text = `${item.target.label}로 바꾸면 예상 ${fmt(p.out_size)} (화질 ${p.quality})`;
       if (p.had_alpha) text += ", 투명한 부분은 검은색으로 채웁니다";
       if (p.distance !== null && p.distance > 1.0) text += ", 화질 100에서도 아주 작은 차이가 남을 수 있습니다";
@@ -107,22 +111,35 @@ function render() {
     groups.set(item.target.id, g);
   }
 
+  // 버튼은 다시 만들지 않고 고쳐 쓴다 (계산 중에 화면이 바뀌어도 누르던 것이 사라지지 않게)
   const actions = $("actions");
-  actions.replaceChildren();
+  for (const [id, button] of buttons) {
+    if (!groups.has(id)) {
+      button.remove();
+      buttons.delete(id);
+    }
+  }
   const lines = [];
   for (const g of groups.values()) {
-    const button = el("button", "", `${g.target.label}로 바꾸기 (${g.left.length}개)`);
+    let button = buttons.get(g.target.id);
+    if (!button) {
+      button = el("button");
+      button.addEventListener("click", () => convertAll(g.target.id));
+      actions.append(button);
+      buttons.set(g.target.id, button);
+    }
+    button.textContent = `${g.target.label}로 바꾸기 (${g.left.length}개)`;
     button.disabled = g.left.length === 0 || g.left.some((it) => it.state === "saving");
-    button.addEventListener("click", () => convertAll(g.target.id));
-    actions.append(button);
 
     const known = g.all.filter((it) => it.prepared);
     const before = known.reduce((s, it) => s + it.info.size, 0);
     const after = known.reduce((s, it) => s + it.prepared.out_size, 0);
     let line = `${g.target.label}: 원본 ${fmt(before)}, 예상 ${fmt(after)}`;
     if (known.length < g.all.length) line += ` (${known.length}/${g.all.length}개 계산함)`;
+    if (g.target.id === "pdf") line += ". 슬라이드를 그림으로 담아서 PDF의 글자는 선택하거나 검색할 수 없습니다";
     lines.push(line);
   }
+  $("jpeg-options").hidden = !groups.has("jpeg");
   $("summary").textContent = lines.join(" / ");
   $("ask").hidden = groups.size === 0;
   $("clear").hidden = items.size === 0;
@@ -147,6 +164,22 @@ const drop = $("drop");
 listen("tauri://drag-enter", () => drop.classList.add("over"));
 listen("tauri://drag-leave", () => drop.classList.remove("over"));
 listen("tauri://drag-drop", () => drop.classList.remove("over"));
+
+// JPEG 파일 이름 끝(.jpg / .jpeg). 고른 값은 러스트가 저장할 때 쓰고, 다음에 켤 때도 남는다.
+const jpegExt = $("jpeg-ext");
+invoke("settings")
+  .then((s) => {
+    jpegExt.value = s.jpeg_extension;
+  })
+  .catch(() => {});
+jpegExt.addEventListener("change", async () => {
+  const chosen = jpegExt.value;
+  try {
+    await invoke("set_jpeg_extension", { extension: chosen });
+  } catch (err) {
+    $("summary").textContent = String(err);
+  }
+});
 
 $("clear").addEventListener("click", async () => {
   await invoke("clear");

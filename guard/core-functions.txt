@@ -7,3 +7,6 @@ crates/core/src/detect.rs | pub fn detect(
 crates/core/src/jpeg.rs | pub fn png_to_jpeg(
 # 앱이 변환을 러스트 핵심 계산에 맡기는지
 src-tauri/src/main.rs | png_to_jpeg(&input)
+# PPTX를 PDF로 바꾸기 (슬라이드 그리기, EMF 그림 풀기, 글꼴 폭 맞추기 포함)
+crates/core/src/pdf.rs | pub fn pptx_to_pdf(
+src-tauri/src/main.rs | pptx_to_pdf(&input)
